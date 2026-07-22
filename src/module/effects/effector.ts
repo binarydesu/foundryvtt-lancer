@@ -124,18 +124,12 @@ export class EffectHelper {
       return;
     }
 
-    // Define our actual logic for passing down effects
-    const propagateTo = async (target: LancerActor) => {
-      console.debug(`Actor ${this.actor.name} propagating effects to ${target.name}`);
-      // Add new from this pilot
-      let changes = foundry.utils.duplicate(this._passdownEffectTracker.curr_value);
-      changes.forEach(c => {
-        c.flags[game.system.id] ??= {};
-        c.flags[game.system.id].deep_origin = c.origin;
-        c.origin = this.actor.uuid;
-      });
-      await target.effectHelper.setEphemeralEffects(this.actor.uuid, changes);
-    };
+    // Effects are attributed back to us by uuid, which an unstored actor does not have
+    const from_uuid = this.actor.uuid;
+    if (!from_uuid) return;
+
+    // Work out who should receive our effects
+    let targets: LancerActor[] = [];
 
     // Pilots try to propagate to their mech
     if (this.actor.is_pilot()) {
@@ -144,7 +138,7 @@ export class EffectHelper {
         this.actor.system.active_mech?.status == "resolved" &&
         this.actor.system.active_mech.value.system.pilot?.id == this.actor.uuid
       ) {
-        await propagateTo(this.actor.system.active_mech.value);
+        targets.push(this.actor.system.active_mech.value);
       }
     }
 
@@ -152,22 +146,36 @@ export class EffectHelper {
     else if (this.actor.is_mech()) {
       let pilot = this.actor.system.pilot?.value ?? null;
       // Find our controlled deployables
-      let ownedDeployables = game.actors!.filter(
+      targets = game.actors!.filter(
         a =>
           a.is_deployable() &&
           a.system.owner !== null &&
           (a.system.owner.value == this.actor || a.system.owner.value == pilot)
-      );
-      for (let dep of ownedDeployables) {
-        await propagateTo(dep); // TODO - look for active tokens instead?
-      }
+      ); // TODO - look for active tokens instead?
     } else if (this.actor.is_npc()) {
       // Find our controlled deployables. Simpler here
-      let ownedDeployables = game.actors!.filter(a => a.is_deployable() && a.system.owner?.value == this.actor);
-      for (let dep of ownedDeployables) {
-        await propagateTo(dep); // TODO - look for active tokens instead?
-      }
+      targets = game.actors!.filter(a => a.is_deployable() && a.system.owner?.value == this.actor);
     }
+
+    // An actor that was never stored has no id to address an update to
+    targets = targets.filter(t => !!t.id);
+    if (!targets.length) return;
+
+    // One request for the lot rather than a round trip per child -- a mech with several
+    // deployables was previously issuing that many sequential updates on every change.
+    const updates = targets.map(target => {
+      console.debug(`Actor ${this.actor.name} propagating effects to ${target.name}`);
+      let changes = foundry.utils.duplicate(this._passdownEffectTracker.curr_value);
+      changes.forEach((c: any) => {
+        c.flags[game.system.id] ??= {};
+        c.flags[game.system.id].deep_origin = c.origin;
+        c.origin = from_uuid;
+      });
+      const state: InheritedEffectsState = { from_uuid, data: changes, visible: true };
+      return { _id: target.id!, "system.inherited_effects": state };
+    });
+
+    await LancerActor.updateDocuments(updates);
   }
 
   // ########### Miscellaneous effect helper stuff that also lives here just to be in the same "namespace" so to speak #########
