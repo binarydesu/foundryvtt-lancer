@@ -54,6 +54,9 @@
     const selected = lcpData.filter(p => rowSelectionTracker[p.id].checked);
     if (!selected.length) return null;
     if (selected.length === 1) {
+      // Already-imported packs are listed from their manifest alone, with no content pack
+      // loaded, so cp is absent -- the multi-select and hover paths both guard for this.
+      if (!selected[0].cp) return null;
       const summary = generateLcpSummary(selected[0].cp);
       summary.aggregate = true;
       return summary;
