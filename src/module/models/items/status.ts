@@ -6,6 +6,7 @@ import type { BaseData } from "../../base-data";
 import type { PackedStatusData } from "../../util/unpacking/packed-types";
 import { LancerDataModel, type UnpackContext } from "../shared";
 import { template_universal_item } from "./shared";
+import { asChanges } from "../../effects/change";
 
 import fields = foundry.data.fields;
 
@@ -51,14 +52,14 @@ export function generateStunnedEffect({ name = "Stunned", description = "" }): P
   return {
     name,
     description,
-    changes: [
+    changes: asChanges([
       {
         key: "system.evasion",
-        mode: CONST.ACTIVE_EFFECT_MODES.OVERRIDE,
+        type: "override",
         priority: null,
         value: "5",
       },
-    ],
+    ]),
   };
 }
 
