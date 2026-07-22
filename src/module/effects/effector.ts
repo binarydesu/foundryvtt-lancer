@@ -28,9 +28,14 @@ export class EffectHelper {
   // Track our parent actor
   constructor(private readonly actor: LancerActor) {}
 
-  // Set the expected effects from a given uuid
-  // Kick off an update if update == true
-  // If render, then the update will require redraw.
+  /**
+   * Set the expected effects from a given uuid. If visible, the update will require redraw.
+   *
+   * @public Nothing inside the system calls this any more -- propagateEffectsInner writes the
+   * same state for every recipient in one batched request instead. It stays because effectHelper
+   * is public on LancerActor and reachable through the game.lancer API, so modules may depend on
+   * it. Do not remove without checking that.
+   */
   async setEphemeralEffects(source_uuid: string, data: [], visible: boolean = true) {
     let es: InheritedEffectsState = {
       from_uuid: source_uuid,
@@ -47,8 +52,13 @@ export class EffectHelper {
     );
   }
 
-  // Clear the expected effects for a given uuid
-  // Kick off an update if update == true
+  /**
+   * Clear the expected effects for a given uuid.
+   *
+   * @public Also has no callers inside the system -- it is the counterpart to
+   * setEphemeralEffects and reachable through the game.lancer API. Do not remove without
+   * checking for module usage.
+   */
   async clearEphemeralEffects() {
     let curr = this.actor.system.inherited_effects as InheritedEffectsState | null;
     if (curr) {
@@ -213,6 +223,11 @@ export class EffectHelper {
     );
   }
 
+  /**
+   * Find an ActiveEffect on the Actor whose statuses include the given name.
+   *
+   * @public No callers inside the system; reachable through the game.lancer API.
+   */
   findEffect(effect: string): LancerActiveEffect | null {
     return this.actor.effects.find(eff => eff.statuses.some((name: string) => name.includes(effect)));
   }
