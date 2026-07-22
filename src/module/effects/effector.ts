@@ -52,9 +52,12 @@ export class EffectHelper {
   async clearEphemeralEffects() {
     let curr = this.actor.system.inherited_effects as InheritedEffectsState | null;
     if (curr) {
+      // The field is nullable with an initial of null, so assigning null leaves it in exactly
+      // the state deleting the key would have. Avoids the "-=" special key entirely, which v14
+      // silently ignores here -- the effects simply stayed put, with no error to show for it.
       await this.actor.update(
         {
-          "system.-=inherited_effects": null,
+          "system.inherited_effects": null,
         },
         {
           render: curr.visible,
