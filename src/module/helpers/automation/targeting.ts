@@ -20,8 +20,12 @@ export async function checkForHit(tech: boolean, roll: Roll, target: LancerActor
 // Quickly computes the distance between two tokens as a number of grid units
 // TODO: Make it size aware, using the token.document.system.size if it exists? Prefer htss size
 export function gridDist(token1: Token.Implementation, token2: Token.Implementation) {
-  let c1 = token1.center;
-  let c2 = token2.center;
-  let ray = new Ray(c1, c2);
-  return canvas?.grid?.grid?.measureDistances([{ ray }], { gridSpaces: true })[0];
+  // Both `canvas.grid.grid` and `BaseGrid#measureDistances` were removed in v14 (their v12
+  // deprecation period expired). The optional chaining made that silent -- this returned
+  // undefined rather than throwing. `measurePath` is the replacement and already reports
+  // distance in grid units, so the old `gridSpaces: true` flag has no equivalent.
+  // The cast is needed because fvtt-types declares BaseGrid#measurePath with `never`
+  // parameters to force narrowing to a concrete grid subclass, which `canvas.grid` is not.
+  const grid = canvas?.grid as { measurePath(waypoints: Canvas.Point[], options: object): { distance: number } };
+  return grid?.measurePath([token1.center, token2.center], {}).distance;
 }
