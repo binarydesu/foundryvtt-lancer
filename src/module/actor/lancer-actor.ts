@@ -401,6 +401,10 @@ export class LancerActor<SubType extends Actor.SubType = Actor.SubType> extends 
    *  - Finalize derived data on weaponry based on fully prepared actor statistics
    */
   prepareDerivedData() {
+    // Same omission that was fixed for prepareBaseData: core does its own work in the
+    // derived-data step (and v14's phased active effect changes depend on that ordering),
+    // so the chain has to be unbroken.
+    super.prepareDerivedData();
     // Ask items to prepare their final attributes using weapon_bonuses / equip information
     for (let item of this.items.contents) {
       item.prepareFinalAttributes();
