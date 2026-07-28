@@ -171,9 +171,7 @@ export class EffectHelper {
     targets = targets.filter(t => !!t.id);
     if (!targets.length) return;
 
-    // One request for the lot rather than a round trip per child -- a mech with several
-    // deployables was previously issuing that many sequential updates on every change.
-    const updates = targets.map(target => {
+    const stateFor = (target: LancerActor): InheritedEffectsState => {
       console.debug(`Actor ${this.actor.name} propagating effects to ${target.name}`);
       let changes = foundry.utils.duplicate(this._passdownEffectTracker.curr_value);
       changes.forEach((c: any) => {
@@ -181,11 +179,25 @@ export class EffectHelper {
         c.flags[game.system.id].deep_origin = c.origin;
         c.origin = from_uuid;
       });
-      const state: InheritedEffectsState = { from_uuid, data: changes, visible: true };
-      return { _id: target.id!, "system.inherited_effects": state };
-    });
+      return { from_uuid, data: changes, visible: true };
+    };
 
-    await LancerActor.updateDocuments(updates);
+    // A synthetic actor on an unlinked token carries the id of the world actor it came from, so
+    // an update addressed by _id would land on that world actor instead. Those go one at a time.
+    // Only the pilot branch can produce one -- the deployable branches read game.actors.
+    const stored = targets.filter(t => !t.isToken);
+    const synthetic = targets.filter(t => t.isToken);
+
+    // One request for the stored ones rather than a round trip per child. A mech with several
+    // deployables was previously issuing that many sequential updates on every change.
+    if (stored.length) {
+      await LancerActor.updateDocuments(
+        stored.map(target => ({ _id: target.id!, "system.inherited_effects": stateFor(target) }))
+      );
+    }
+    for (const target of synthetic) {
+      await target.update({ "system.inherited_effects": stateFor(target) });
+    }
   }
 
   // ########### Miscellaneous effect helper stuff that also lives here just to be in the same "namespace" so to speak #########
@@ -226,7 +238,8 @@ export class EffectHelper {
   /**
    * Find an ActiveEffect on the Actor whose statuses include the given name.
    *
-   * @public No callers inside the system; reachable through the game.lancer API.
+   * Used by removeActiveEffect and removeActiveEffects above, and also reachable through the
+   * game.lancer API.
    */
   findEffect(effect: string): LancerActiveEffect | null {
     return this.actor.effects.find(eff => eff.statuses.some((name: string) => name.includes(effect)));
