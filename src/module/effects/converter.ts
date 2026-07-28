@@ -12,7 +12,7 @@ import type { BonusData } from "../models/bits/bonus";
 import type { SystemTemplates } from "../system-template";
 import { rollEvalSync } from "../util/misc";
 import { LancerActiveEffect, type LancerEffectTarget } from "./lancer-active-effect";
-import { asChanges, type LancerChangeType } from "./change";
+import { asChanges, type LancerChangeType, type LancerEffectChange } from "./change";
 
 const FRAME_STAT_PRIORITY = 10; // Also handles npc classes
 const BONUS_STAT_PRIORITY = 20;
@@ -34,7 +34,7 @@ export function frameInnateEffect(frame: LancerFRAME) {
     "speed",
     "tech_attack",
   ];
-  let changes = keys.map(key => ({
+  let changes: LancerEffectChange[] = keys.map(key => ({
     key: `system.${key}`,
     type: "override",
     priority: FRAME_STAT_PRIORITY,
@@ -287,7 +287,7 @@ export function npcInnateEffects(npc: LancerActor): LancerActiveEffect[] {
  * Creates the ActiveEffect data for a status/condition
  */
 export function statusInnateEffect(status: LancerSTATUS) {
-  let changes = [
+  let changes: LancerEffectChange[] = [
     {
       key: `system.statuses.${status.system.lid}`,
       type: "override",
@@ -359,7 +359,7 @@ const npc_keys: Array<ClassStatKey> = [
 ];
 
 // Make a bonus appropriate to the provided stat key
-function makeNpcBonus(stat: ClassStatKey, value: number, type: LancerChangeType, priority: number) {
+function makeNpcBonus(stat: ClassStatKey, value: number, type: LancerChangeType, priority: number): LancerEffectChange {
   switch (stat) {
     case "hp":
       return {
@@ -405,9 +405,7 @@ export function npcClassInnateEffect(class_: LancerNPC_CLASS) {
   let tier = (class_?.actor as LancerNPC | undefined)?.system.tier ?? 1;
   let bs = class_.system.base_stats[tier - 1];
 
-  let changes = npc_keys.map(key =>
-    makeNpcBonus(key, bs[key], "override", FRAME_STAT_PRIORITY)
-  );
+  let changes = npc_keys.map(key => makeNpcBonus(key, bs[key], "override", FRAME_STAT_PRIORITY));
 
   return {
     flags: { lancer: { ephemeral: true } },
@@ -422,7 +420,7 @@ export function npcClassInnateEffect(class_: LancerNPC_CLASS) {
 // Converts the system.bonus of an npc feature into an array
 export function npcFeatureBonusEffects(feature: LancerNPC_FEATURE) {
   if (!feature.system.bonus) return null; // No bonuses to convert
-  let changes = [];
+  let changes: LancerEffectChange[] = [];
   for (let key of npc_keys) {
     let value = feature.system.bonus[key];
     if (value !== null) {
@@ -446,7 +444,7 @@ export function npcFeatureBonusEffects(feature: LancerNPC_FEATURE) {
 // Converts the system.override of an npc feature into an array
 export function npcFeatureOverrideEffects(feature: LancerNPC_FEATURE) {
   if (!feature.system.override) return null; // No overrides to convert
-  let changes = [];
+  let changes: LancerEffectChange[] = [];
   for (let key of npc_keys) {
     let value = feature.system.override[key];
     if (value !== null) {
@@ -499,7 +497,7 @@ export function convertBonus(item: LancerItem, name: string, bonus: BonusData) {
   } else {
     // ui.notifications?.warn("Bonus restrictions have no effect");
   }
-  let changes = [];
+  let changes: LancerEffectChange[] = [];
   let disabled = false;
   let target_type: LancerEffectTarget | undefined = undefined;
 

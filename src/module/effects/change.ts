@@ -12,7 +12,11 @@ export type LancerChangeType = "custom" | "multiply" | "add" | "subtract" | "dow
 
 export type LancerEffectChange = {
   key: string;
-  value: string | number;
+  // Foundry defaults an absent value to "", which is what the status effects rely on -- they only
+  // need the key to exist. The type is left open because most values are read straight out of
+  // system data, which the stale fvtt-types resolve to unusable field descriptors rather than to
+  // string or number. Narrow this once fvtt-types ships v14.
+  value?: any;
   type: LancerChangeType;
   priority?: number | null;
 };
