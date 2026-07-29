@@ -78,9 +78,15 @@ async function applyStabilizeUpdates(state: FlowState<LancerFlowState.StabilizeD
   let option2text = "";
   state.data.description = "";
   switch (state.data.option1) {
-    case StabOptions1.Cool:
-      option1text = "Mech is cooling itself. Heat and @Compendium[world.status-items.Exposed] cleared.";
+    case StabOptions1.Cool: {
+      // Cooling clears Exposed only if it is on the actor, so only say so when it is. This text is
+      // built before stabilize() runs, so the status still holds the pre-stabilize state.
+      const wasExposed = !!(state.actor.system as any).statuses?.exposed;
+      option1text = wasExposed
+        ? "Mech is cooling itself. Heat and @Compendium[world.status-items.Exposed] cleared."
+        : "Mech is cooling itself. Heat cleared.";
       break;
+    }
     case StabOptions1.Repair:
       if (state.actor.is_mech() && state.actor.system.repairs.value <= 0) {
         ui.notifications!.warn("Mech has no repairs left. Please try again.");
