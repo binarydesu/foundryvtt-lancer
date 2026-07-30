@@ -311,10 +311,19 @@ Hooks.on("applyActiveEffect", function (actor, change) {
   // silently dropped weapon damage/range bonuses. Custom-typed changes still route here,
   // so match those by key.
   const changeType = (change as { type?: string }).type;
-  // A change that still carries a bare numeric mode can only come from a module, since v14
-  // gives its own changes a type. Reading the mode is deprecated, so only look when there
-  // is no type to read instead.
-  const legacyMode = changeType === undefined ? (change as { mode?: number }).mode : undefined;
+  // A module still emitting our out-of-range numeric modes (11/12) never arrives untyped in
+  // v14: the migration rewrites `mode: N` to `type: "custom.N"` (and keeps mode: N alongside).
+  // The old `type === undefined` guard therefore never matched such a change and it was
+  // dropped. Recover the numeric mode from the "custom.N" suffix instead -- this matches the
+  // migrated change and avoids reading the deprecated `mode` field. Fall back to a bare mode
+  // only for a truly untyped change, which no v14 core path produces.
+  const suffix =
+    typeof changeType === "string" && changeType.startsWith("custom.") ? Number(changeType.slice("custom.".length)) : NaN;
+  const legacyMode = !Number.isNaN(suffix)
+    ? suffix
+    : changeType === undefined
+      ? (change as { mode?: number }).mode
+      : undefined;
   const isSet = legacyMode == AE_MODE_SET_JSON;
   const isAppend = legacyMode == AE_MODE_APPEND_JSON || (changeType === "custom" && JSON_APPEND_KEYS.has(change.key));
   if (!isSet && !isAppend) return;
