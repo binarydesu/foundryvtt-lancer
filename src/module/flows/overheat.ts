@@ -5,6 +5,7 @@ import type { UUIDRef } from "../source-template";
 import { renderTemplateStep } from "./_render";
 import { Flow, type FlowState, type Step } from "./flow";
 import { LancerFlowState } from "./interfaces";
+import { applyTableCondition, conditionForOutcome } from "./table-conditions";
 
 const lp = LANCER.log_prefix;
 
@@ -14,7 +15,18 @@ export function registerOverheatSteps(flowSteps: Map<string, Step<any, any> | Fl
   flowSteps.set("noStressRemaining", noStressRemaining);
   flowSteps.set("checkOverheatMultipleOnes", checkOverheatMultipleOnes);
   flowSteps.set("overheatInsertEngCheckButton", overheatInsertEngCheckButton);
+  flowSteps.set("applyOverheatCondition", applyOverheatCondition);
   flowSteps.set("printOverheatCard", printOverheatCard);
+}
+
+/**
+ * Apply the condition the rolled outcome inflicts, if any. Runs after checkOverheatMultipleOnes so
+ * that an overridden outcome is honored, and before the card is printed so the two agree.
+ */
+export async function applyOverheatCondition(state: FlowState<LancerFlowState.OverheatRollData>): Promise<boolean> {
+  if (!state.data) throw new TypeError(`Overheat roll flow data missing!`);
+  await applyTableCondition(state.actor, state.data.condition);
+  return true;
 }
 
 /**
@@ -28,6 +40,7 @@ export class OverheatFlow extends Flow<LancerFlowState.OverheatRollData> {
     "checkOverheatMultipleOnes",
     "overheatInsertEngCheckButton",
     "structureInsertCascadeRollButton",
+    "applyOverheatCondition",
     "printOverheatCard",
   ];
 
@@ -147,6 +160,7 @@ export async function rollOverheatTable(state: FlowState<LancerFlowState.Overhea
       type: "overheat",
       title: overheatTableTitles[3],
       desc: overheatTableDescriptions(3, 1),
+      condition: conditionForOutcome(overheatTableDescriptions(3, 1)),
       remStress: 1,
       val: actor.system.stress.value,
       max: actor.system.stress.max,
@@ -180,6 +194,7 @@ export async function rollOverheatTable(state: FlowState<LancerFlowState.Overhea
     type: "overheat",
     title: overheatTableTitles[result],
     desc: overheatTableDescriptions(result, remStress),
+    condition: conditionForOutcome(overheatTableDescriptions(result, remStress)),
     remStress: remStress,
     val: actor.system.stress.value,
     max: actor.system.stress.max,
@@ -219,10 +234,12 @@ export async function noStressRemaining(state: FlowState<LancerFlowState.Overhea
   if (actor.is_npc() && actor.system.stress.max == 1) {
     state.data.title = overheatTableTitles[3];
     state.data.desc = overheatTableDescriptions(3, 1);
+    state.data.condition = conditionForOutcome(state.data.desc);
     state.data.result = undefined;
   } else {
     state.data.title = overheatTableTitles[0];
     state.data.desc = overheatTableDescriptions(0, 0);
+    state.data.condition = conditionForOutcome(state.data.desc);
     state.data.result = undefined;
   }
   printCard(state);
@@ -257,6 +274,8 @@ export async function checkOverheatMultipleOnes(state: FlowState<LancerFlowState
   if (one_count > 1) {
     state.data.title = overheatTableTitles[0];
     state.data.desc = overheatTableDescriptions(roll.total ?? 1, 1);
+    // Multiple ones overrides the rolled outcome, so the condition has to follow it.
+    state.data.condition = conditionForOutcome(state.data.desc);
   }
 
   return true;

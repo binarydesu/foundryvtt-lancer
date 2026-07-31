@@ -345,6 +345,10 @@ export namespace LancerFlowState {
     };
     reroll_data?: { structure: number };
     remStruct: number;
+    // Status lid the rolled outcome inflicts, if any. Carried alongside desc rather than derived
+    // from it later: desc is an i18n key until it is localized for the card, and the multiple-ones
+    // branch localizes it early, so reading it back is not reliable.
+    condition?: string | null;
     embedButtons?: Array<string>; // HTML for flow buttons to embed in the chat card
   }
 
@@ -372,6 +376,8 @@ export namespace LancerFlowState {
     };
     reroll_data?: { stress: number };
     remStress: number;
+    // See PrimaryStructureRollData#condition.
+    condition?: string | null;
     embedButtons?: Array<string>; // HTML for flow buttons to embed in the chat card
   }
 

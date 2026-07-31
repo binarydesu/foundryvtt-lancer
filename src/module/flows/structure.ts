@@ -8,8 +8,21 @@ import { Flow, type FlowState, type Step } from "./flow";
 import { LancerFlowState } from "./interfaces";
 import { DamageRollFlow } from "./damage";
 import { DamageType } from "../enums";
+import { applyTableCondition, conditionForOutcome } from "./table-conditions";
 
 const lp = LANCER.log_prefix;
+
+/**
+ * Apply the condition the rolled outcome inflicts, if any. Runs after checkStructureMultipleOnes so
+ * that an overridden outcome is honored, and before the card is printed so the two agree.
+ */
+export async function applyStructureCondition(
+  state: FlowState<LancerFlowState.PrimaryStructureRollData>
+): Promise<boolean> {
+  if (!state.data) throw new TypeError(`Structure roll flow data missing!`);
+  await applyTableCondition(state.actor, state.data.condition);
+  return true;
+}
 
 export function registerStructureSteps(flowSteps: Map<string, Step<any, any> | Flow<any>>) {
   flowSteps.set("preStructureRollChecks", preStructureRollChecks);
@@ -20,6 +33,7 @@ export function registerStructureSteps(flowSteps: Map<string, Step<any, any> | F
   flowSteps.set("structureInsertHullCheckButton", structureInsertHullCheckButton);
   flowSteps.set("structureInsertSecondaryRollButton", structureInsertSecondaryRollButton);
   flowSteps.set("structureInsertCascadeRollButton", structureInsertCascadeRollButton);
+  flowSteps.set("applyStructureCondition", applyStructureCondition);
   flowSteps.set("printStructureCard", printStructureCard);
   flowSteps.set("secondaryStructureRoll", secondaryStructureRoll);
   flowSteps.set("printSecondaryStructureCard", printSecondaryStructureCard);
@@ -38,6 +52,7 @@ export class StructureFlow extends Flow<LancerFlowState.PrimaryStructureRollData
     "structureInsertHullCheckButton",
     "structureInsertSecondaryRollButton",
     "structureInsertCascadeRollButton",
+    "applyStructureCondition",
     "printStructureCard",
   ];
 
@@ -228,10 +243,14 @@ export async function rollStructureTable(state: FlowState<LancerFlowState.Primar
   // Check if this is a Monstrosity
   const isMonstrosity = hasUniquePhysiology(actor);
 
+  const rolledDesc = isMonstrosity
+    ? monstrosityTableDescriptions(result, remStruct)
+    : structTableDescriptions(result, remStruct);
   state.data = {
     type: "structure",
     title: isMonstrosity ? monstrosityTableTitles[result] : structTableTitles[result],
-    desc: isMonstrosity ? monstrosityTableDescriptions(result, remStruct) : structTableDescriptions(result, remStruct),
+    desc: rolledDesc,
+    condition: conditionForOutcome(rolledDesc),
     remStruct: remStruct,
     val: actor.system.structure.value,
     max: actor.system.structure.max,
@@ -274,6 +293,7 @@ export async function noStructureRemaining(
   if (typeof printCard !== "function") throw new TypeError(`printStructureCard flow step is not a function.`);
   state.data.title = isMonstrosity ? monstrosityTableTitles[0] : structTableTitles[0];
   state.data.desc = isMonstrosity ? monstrosityTableDescriptions(0, 0) : structTableDescriptions(0, 0);
+  state.data.condition = conditionForOutcome(state.data.desc);
   state.data.result = undefined;
   // Subtract the hp which was added in the preStructureRollChecks step.
   await actor.update({ "system.hp.value": actor.system.hp.value - actor.system.hp.max });
@@ -320,6 +340,9 @@ export async function checkStructureMultipleOnes(
       state.data.title = structTableTitles[0];
       state.data.desc = structTableDescriptions(roll.total ?? 1, 1);
     }
+    // Multiple ones overrides the rolled outcome, so the condition has to follow it. Read before the
+    // localize below, which would leave desc no longer matching a key.
+    state.data.condition = conditionForOutcome(state.data.desc);
     state.data.title = game.i18n.localize(state.data.title);
     state.data.desc = game.i18n.localize(state.data.desc);
     await actor.update({
