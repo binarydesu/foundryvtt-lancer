@@ -177,7 +177,9 @@ export class EffectHelper {
    */
   async removeActiveEffect(effect: string) {
     const target_effect = this.findEffect(effect);
-    target_effect?.delete();
+    // Awaited: both methods are async, and a caller that awaits them is entitled to have the
+    // deletion actually be done -- Stabilize/Cool clears Exposed and then writes its own update.
+    await target_effect?.delete();
   }
 
   /**
@@ -185,12 +187,11 @@ export class EffectHelper {
    * @param effects Array of String names of the ActiveEffects to remove.
    */
   async removeActiveEffects(effects: string[]) {
-    const target_effects = effects.map(e => this.findEffect(e));
-    if (!target_effects || !target_effects.some(e => !!e)) return;
-    this.actor.deleteEmbeddedDocuments(
-      "ActiveEffect",
-      target_effects.map(e => e?.id || "")
-    );
+    // Only the names that actually matched. Mapping a miss to "" used to hand an empty id to
+    // deleteEmbeddedDocuments alongside the real ones.
+    const target_ids = effects.map(e => this.findEffect(e)?.id).filter((id): id is string => !!id);
+    if (!target_ids.length) return;
+    await this.actor.deleteEmbeddedDocuments("ActiveEffect", target_ids);
   }
 
   /**

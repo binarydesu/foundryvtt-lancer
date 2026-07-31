@@ -24,7 +24,7 @@ export class StrussHelper {
 
     if (o1 === StabOptions1.Cool) {
       changes["system.heat.value"] = 0;
-      this.actor.effectHelper.removeActiveEffect("exposed");
+      await this.actor.effectHelper.removeActiveEffect("exposed");
     } else if (o1 === StabOptions1.Repair) {
       // Allow NPCs here for the Self Repair feature from Veteran
       if (this.actor.is_mech() || this.actor.is_npc()) {
