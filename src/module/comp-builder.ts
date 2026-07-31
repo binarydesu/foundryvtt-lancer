@@ -82,6 +82,20 @@ export async function importCP(
     totalItems += cp.data.talents?.length ?? 0;
     totalItems += cp.data.bonds?.length ?? 0;
     totalItems += cp.data.weapons?.length ?? 0;
+    // How much the pack actually contains, counted before the progress-bar inflation below. A pack
+    // that parses but yields nothing used to import "successfully" with an empty result and no hint
+    // as to why -- which is exactly how the v3 format went unnoticed for so long. Say so instead.
+    const contentCount = totalItems;
+    if (contentCount === 0) {
+      const label = cp.manifest?.name ? `"${cp.manifest.name}"` : "This content pack";
+      ui.notifications?.warn(
+        `${label} contained no importable entries. It may use a format this version does not read, ` +
+          `or hold only data Foundry does not import.`,
+        { permanent: true }
+      );
+      console.warn(`${lp} Content pack ${cp.manifest?.name ?? "(unnamed)"} yielded 0 importable entries`, cp.data);
+    }
+
     // We need to double count NPC classes since we'll also be creating actors for them,
     // And then add again all the base features.
     totalItems += cp.data.npcClasses?.length ?? 0;
