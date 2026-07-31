@@ -208,6 +208,92 @@ async function getPackID(manifest: IContentPackManifest): Promise<string> {
   return `${manifest.author}/${manifest.name}`;
 }
 
+/**
+ * Read the "collection style" NPC files a CC v3 LCP uses, in addition to the "library style"
+ * npc_classes/npc_templates/npc_features triple that v2 packs ship.
+ *
+ * A collection is one file per class or template -- `npcc_<name>.json` / `npct_<name>.json` -- each
+ * holding an array whose first element is the class or template and whose remaining elements are its
+ * features. Two links the rest of the system reads have to be rebuilt from that:
+ *
+ * - `base_features` / `optional_features` on the parent, which the pack does not ship at all. These
+ *   hold lids and are load-bearing: generating an NPC resolves them through fromLid(). A feature
+ *   counts as base only when it says so; the wiki defines a missing `base` as optional, and most
+ *   features in the official pack omit it.
+ * - `origin` on each feature. v3 writes this as the *id string* of the parent, where the rest of the
+ *   system wants the {type, name, base} object -- feature sheets read `origin.name`. So it is always
+ *   rebuilt, not merely filled in when absent.
+ *
+ * Ids are generated the same way the library-style path generates them, and before linking, so the
+ * lids we write into base_features always exist.
+ *
+ * Checked against Massif's own "Lancer CORE NPCs" 2.0.5 (33 classes, 12 templates, 401 features).
+ * Note the wiki documents feature types in lower case, but that pack writes them capitalized, which
+ * is what NpcFeatureType expects; unpackNpcFeature normalizes either way.
+ */
+async function readNpcCollections(zip: JSZip): Promise<{
+  npcClasses: PackedNpcClassData[];
+  npcTemplates: PackedNpcTemplateData[];
+  npcFeatures: AnyPackedNpcFeatureData[];
+}> {
+  const npcClasses: PackedNpcClassData[] = [];
+  const npcTemplates: PackedNpcTemplateData[] = [];
+  const npcFeatures: AnyPackedNpcFeatureData[] = [];
+
+  // Match on the basename so a pack that nests its data in a folder still works.
+  const collectionFiles = zip.file(/(^|\/)npc[ct]_[^/]*\.json$/i);
+
+  for (const file of collectionFiles) {
+    const basename = file.name.split("/").pop() ?? file.name;
+    const isTemplate = basename.toLowerCase().startsWith("npct_");
+    let entries: any[];
+    try {
+      const parsed = JSON.parse(await file.async("text"));
+      if (!Array.isArray(parsed)) throw new Error("collection is not an array");
+      entries = parsed;
+    } catch (e) {
+      console.error(`Error reading NPC collection ${file.name} from package, skipping. Error follows:`);
+      console.trace(e);
+      continue;
+    }
+    if (!entries.length) continue;
+
+    const [parent, ...features] = entries;
+    if (!parent?.name) {
+      console.error(`NPC collection ${file.name} has no class or template in its first entry, skipping.`);
+      continue;
+    }
+
+    parent.id ||= generateItemID(
+      EntryTypeLidPrefix(isTemplate ? EntryType.NPC_TEMPLATE : EntryType.NPC_CLASS),
+      parent.name
+    );
+
+    const baseLids: string[] = [];
+    const optionalLids: string[] = [];
+    for (const feature of features) {
+      if (!feature?.name) continue;
+      feature.id ||= generateItemID(EntryTypeLidPrefix(EntryType.NPC_FEATURE), feature.name);
+      feature.origin = {
+        type: isTemplate ? "Template" : "Class",
+        name: parent.name,
+        base: !!feature.base,
+      };
+      (feature.base ? baseLids : optionalLids).push(feature.id);
+      npcFeatures.push(feature);
+    }
+
+    // A pack is free to list these itself; only fill in what it left out.
+    parent.base_features = parent.base_features?.length ? parent.base_features : baseLids;
+    parent.optional_features = parent.optional_features?.length ? parent.optional_features : optionalLids;
+
+    if (isTemplate) npcTemplates.push(parent);
+    else npcClasses.push(parent);
+  }
+
+  return { npcClasses, npcTemplates, npcFeatures };
+}
+
 async function getZipData<T>(zip: JSZip, filename: string): Promise<T[]> {
   let readResult: T[] | null;
   try {
@@ -237,10 +323,6 @@ export async function parseContentPack(binString: ArrayBuffer | string): Promise
   const manifest = await readZipJSON<IContentPackManifest>(zip, "lcp_manifest.json");
   if (!manifest) throw new Error("Content pack has no manifest");
   if (!isValidManifest(manifest)) throw new Error("Content manifest is invalid");
-  if (manifest.v3)
-    throw new Error(
-      `V3 LCPs are not yet supported in Foundry, please import the V2 LCP instead. (Usually listed on itch as \"for old.compcon.app\".)`
-    );
 
   function generateIDs<T extends { id: string; name: string }>(data: T[], dataPrefix?: string): T[] {
     if (dataPrefix) {
@@ -297,18 +379,26 @@ export async function parseContentPack(binString: ArrayBuffer | string): Promise
     EntryTypeLidPrefix(EntryType.STATUS)
   );
 
-  const npcClasses = generateIDs(
+  // Library style: the three collection files a v2 pack ships. A v3 pack may still use these.
+  const libraryNpcClasses = generateIDs(
     (await readZipJSON<PackedNpcClassData[]>(zip, "npc_classes.json")) || [],
     EntryTypeLidPrefix(EntryType.NPC_CLASS)
   );
-  const npcFeatures = generateIDs(
+  const libraryNpcFeatures = generateIDs(
     (await readZipJSON<AnyPackedNpcFeatureData[]>(zip, "npc_features.json")) || [],
     EntryTypeLidPrefix(EntryType.NPC_FEATURE)
   );
-  const npcTemplates = generateIDs(
+  const libraryNpcTemplates = generateIDs(
     (await readZipJSON<PackedNpcTemplateData[]>(zip, "npc_templates.json")) || [],
     EntryTypeLidPrefix(EntryType.NPC_TEMPLATE)
   );
+
+  // Collection style: one npcc_*/npct_* file per class or template. Additive, so a pack mixing both
+  // styles imports everything.
+  const collections = await readNpcCollections(zip);
+  const npcClasses = [...libraryNpcClasses, ...collections.npcClasses];
+  const npcFeatures = [...libraryNpcFeatures, ...collections.npcFeatures];
+  const npcTemplates = [...libraryNpcTemplates, ...collections.npcTemplates];
 
   const id = await getPackID(manifest);
 

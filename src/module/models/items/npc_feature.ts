@@ -124,6 +124,18 @@ export class NpcFeatureModel extends LancerDataModel<NpcFeatureModelSchema, Item
 }
 
 // Converts an lcp bonus into our expected format
+/**
+ * The lancer-data wiki documents v3 feature types in lower case ("trait", "weapon", ...), while
+ * Massif's own v3 packs write them capitalized, as v2 did. NpcFeatureType is capitalized and the
+ * schema field restricts to exactly those values, so a lower-case type fails validation outright
+ * and the feature never imports -- silently, since the import reports success regardless. Match
+ * case-insensitively so either spelling works; capitalized input passes through unchanged.
+ */
+function restrictNpcFeatureType(raw: unknown): NpcFeatureType {
+  const match = Object.values(NpcFeatureType).find(t => t.toLowerCase() === String(raw).toLowerCase());
+  return match ?? NpcFeatureType.Trait;
+}
+
 export function unpackNpcFeature(
   data: PackedNpcReactionData | PackedNpcSystemData | PackedNpcTechData | PackedNpcTraitData | PackedNpcWeaponData,
   context: UnpackContext
@@ -132,6 +144,8 @@ export function unpackNpcFeature(
   type: EntryType.NPC_FEATURE;
   system: DeepPartial<SourceData.NpcFeature>;
 } {
+  // Normalized once here so both the branch checks below and the stored value agree on casing.
+  data = { ...data, type: restrictNpcFeatureType(data.type) } as typeof data;
   let base = {
     name: data.name,
     type: EntryType.NPC_FEATURE as const,
@@ -173,19 +187,23 @@ export function unpackNpcFeature(
     bs.weapon_type = data.weapon_type;
     bs.on_hit = data.on_hit;
 
-    // Build out damage
+    // Build out damage. v2 puts the per-tier values under `damage`, CC v3 under `val` -- and v3 may
+    // give a single value rather than one per tier. Reading only `damage` threw on every v3 weapon
+    // and aborted the whole import.
     bs.damage = [];
     let i = 0;
     let done = false;
     while (!done) {
       done = true;
       let sub_damage: DamageData[] = [];
-      for (let d of data.damage) {
-        if (d.damage.length > i) {
+      for (let d of data.damage ?? []) {
+        const raw = (d as { damage?: unknown; val?: unknown }).damage ?? (d as { val?: unknown }).val;
+        const tiers = Array.isArray(raw) ? raw : raw === undefined ? [] : [raw];
+        if (tiers.length > i) {
           sub_damage.push(
             unpackDamage({
               type: d.type as any,
-              val: d.damage[i],
+              val: tiers[i] as any,
             })
           );
           done = false;
