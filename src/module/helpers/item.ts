@@ -1175,11 +1175,14 @@ export function buildDeployableHTML(
       ${dep.system.detail}
     </div>`;
 
+  // These four are plain ActivationTypes -- the cost of the action, with no action object behind
+  // them, unlike system.actions below. The flow builds one on the fly from `field`, addressed
+  // through the deployable itself rather than whatever item happens to have granted it.
   let standardActions = [
-    { label: "ACTIVATE", action: dep.system.activation },
-    { label: "DEACTIVATE", action: dep.system.deactivation },
-    { label: "RECALL", action: dep.system.recall },
-    { label: "REDEPLOY", action: dep.system.redeploy },
+    { label: "ACTIVATE", action: dep.system.activation, field: "activation" },
+    { label: "DEACTIVATE", action: dep.system.deactivation, field: "deactivation" },
+    { label: "RECALL", action: dep.system.recall, field: "recall" },
+    { label: "REDEPLOY", action: dep.system.redeploy, field: "redeploy" },
   ].filter(a => !!a.action);
   standardActions.forEach(a => {
     chips.push(
@@ -1187,8 +1190,10 @@ export function buildDeployableHTML(
         a.action,
         {
           label: a.label,
-          uuid: source ? source.item.uuid : undefined,
-          // path: a.path,
+          // Withheld when non-interactive: .noninteractive only softens the styling, it does not
+          // stop pointer events, so a chip given a uuid and path stays clickable regardless.
+          uuid: options?.nonInteractive ? undefined : dep.uuid,
+          path: options?.nonInteractive ? undefined : `deployable.${a.field}`,
         },
         options
       )

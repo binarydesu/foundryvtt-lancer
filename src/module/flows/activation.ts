@@ -62,6 +62,15 @@ export async function initActivationData(
   if (!state.data) throw new TypeError(`Activation flow state missing!`);
   // If we only have an actor, it's a basic action
   if (!state.item) {
+    // An actor-level action whose caller already supplied the action -- a deployable's
+    // ACTIVATE/RECALL/REDEPLOY, which has no item and no dotpath to resolve. Everything downstream
+    // already tolerates a missing item, so only the title and detail need settling here.
+    if (state.data.action) {
+      state.data.title = options?.title || state.data.title || state.data.action.name || "UNKNOWN ACTION";
+      state.data.detail = state.data.detail || state.data.action.detail || "";
+      state.data.tags = state.data.tags ?? [];
+      return true;
+    }
     // TODO - logic for basic actions
     return false;
   } else {

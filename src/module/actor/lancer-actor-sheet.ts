@@ -470,13 +470,20 @@ export class LancerActorSheet<T extends LancerActorType> extends foundry.appv1.s
       let isAction = !isDeployable && path.includes("action");
       let isCoreSystem = !isDeployable && path.includes("core_system");
 
+      if (isDeployable) {
+        // A deployable's ACTIVATE/DEACTIVATE/RECALL/REDEPLOY. The uuid addresses the deployable
+        // actor, not an item, so resolve it as one -- and the path is "deployable.<field>" rather
+        // than a dotpath, because those fields hold a bare ActivationType with no action behind it.
+        const deployable = LancerActor.fromUuidSync(itemId, `Invalid actor ID: ${itemId}`);
+        deployable.beginDeployableActionFlow(path.split(".")[1] ?? "");
+        return;
+      }
+
       const item = LancerItem.fromUuidSync(itemId ?? "", `Invalid item ID: ${itemId}`);
       if (isAction) {
         item.beginActivationFlow(path);
       } else if (isCoreSystem) {
         item.beginCoreActiveFlow(path);
-      } else if (isDeployable) {
-        // TODO - deployable actions
       } else {
         ui.notifications!.error("Could not infer action type");
       }

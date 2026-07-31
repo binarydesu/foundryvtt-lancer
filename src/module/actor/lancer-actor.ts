@@ -1,5 +1,5 @@
 import { LANCER, replaceDefaultResource } from "../config";
-import { DamageType, EntryType } from "../enums";
+import { ActivationType, DamageType, EntryType } from "../enums";
 import { AppliedDamage } from "./damage-calc";
 import type { SystemTemplates } from "../system-template";
 import {
@@ -33,6 +33,7 @@ import { BurnFlow } from "../flows/burn";
 import { createChatMessageStep } from "../flows/_render";
 import { DamageRollFlow } from "../flows/damage";
 import { ScanFlow } from "../flows/scan";
+import { ActivationFlow } from "../flows/activation";
 import type { LancerToken } from "../token";
 
 const lp = LANCER.log_prefix;
@@ -1112,6 +1113,53 @@ export class LancerActor<SubType extends Actor.SubType = Actor.SubType> extends 
 
   async beginScanFlow(target?: LancerToken): Promise<boolean> {
     const flow = new ScanFlow(this, { target });
+    return await flow.begin();
+  }
+
+  /**
+   * Announce one of a deployable's standard actions -- activation, deactivation, recall, redeploy.
+   *
+   * Those four fields hold only an ActivationType, the cost of the action, with no action object to
+   * point a flow at. So build one here: the card carries the deployable's own detail text, which is
+   * what describes what activating or recalling it actually does. Nothing is moved or spawned; the
+   * system has no deployable placement to drive.
+   */
+  async beginDeployableActionFlow(field: string): Promise<boolean> {
+    if (!this.is_deployable()) {
+      ui.notifications?.error(`${this.name} is not a deployable.`);
+      return false;
+    }
+    const activation = (this.system as Record<string, any>)[field] as ActivationType | null | undefined;
+    if (!activation) {
+      ui.notifications?.error(`${this.name} has no ${field} action.`);
+      return false;
+    }
+    // The card should read what the chip read: the fields are named activation/deactivation, the
+    // buttons say ACTIVATE/DEACTIVATE.
+    const label = { activation: "ACTIVATE", deactivation: "DEACTIVATE", recall: "RECALL", redeploy: "REDEPLOY" }[
+      field
+    ] ?? field.toUpperCase();
+    const flow = new ActivationFlow(this, {
+      title: `${label} // ${this.name?.toUpperCase() ?? ""}`,
+      action: {
+        lid: `deployable_${field}`,
+        name: label,
+        activation,
+        detail: this.system.detail ?? "",
+        cost: 1,
+        frequency: "",
+        init: "",
+        trigger: "",
+        terse: "",
+        pilot: false,
+        mech: true,
+        tech_attack: false,
+        heat_cost: 0,
+        synergy_locations: [],
+        damage: [],
+        range: [],
+      },
+    });
     return await flow.begin();
   }
 
