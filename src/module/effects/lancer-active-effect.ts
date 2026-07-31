@@ -422,7 +422,12 @@ declare module "fvtt-types/configuration" {
         // This field maintains the true original
         deep_origin?: string | null;
 
-        // If this is a status, effect, or condition - whichever of those it is
+        // If this is a status, effect, or condition - whichever of those it is.
+        //
+        // Nothing in the system sets or reads this any more: the only writer is
+        // converter.ts statusInnateEffect, which is only reached through the uncalled
+        // statusConfigEffect, so no registered status or applied status effect carries it.
+        // Declared so a module that does set it still type-checks.
         status_type?: "status" | "effect" | "condition";
       };
     };

@@ -285,6 +285,13 @@ export function npcInnateEffects(npc: LancerActor): LancerActiveEffect[] {
 
 /**
  * Creates the ActiveEffect data for a status/condition
+ *
+ * @public Dead inside the system: its only caller is statusConfigEffect below, which is itself
+ * uncalled. Statuses reach actors as real ActiveEffects instead -- StatusModel#_preCreate refuses
+ * an embedded status Item and routes it to toggleStatusEffect, so the CONFIG.statusEffects entries
+ * that back that path are built by LancerActiveEffect's _backfillIcons/populateFrom* as bare
+ * {id, name, img} records. Both functions are exported and reachable through game.lancer, so they
+ * stay. Do not remove without checking for module usage.
  */
 export function statusInnateEffect(status: LancerSTATUS) {
   let changes: LancerEffectChange[] = [
@@ -317,6 +324,10 @@ export function statusInnateEffect(status: LancerSTATUS) {
  * based on a particular status
  * @param status Status to convert
  * @returns A value to be placed in CONFIG.statusEffects
+ *
+ * @public Has no caller anywhere in the system. Nothing populates CONFIG.statusEffects through it,
+ * which is why no registered status carries the flags.lancer.status_type it sets -- and nothing
+ * reads that flag either. Kept because it is exported and reachable through game.lancer.
  */
 export function statusConfigEffect(status: LancerSTATUS): any {
   let base = statusInnateEffect(status);
