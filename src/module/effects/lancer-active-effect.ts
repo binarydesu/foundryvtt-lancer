@@ -293,13 +293,11 @@ export class LancerActiveEffect<
   }
 }
 
-// To support more effects, we add several effect types.
-//
-// @public Neither numeric constant has a producer left in the system: our own weapon-bonus append
-// now travels as the registered "lancer.weaponBonus" change type (see below), and nothing has ever
-// emitted AE_MODE_SET_JSON. Both are exported, so a module may still emit them; the hook below keeps
-// accepting them (and the legacy bare-"custom" append matched by key) for that back-compat.
-export const AE_MODE_SET_JSON = 11 as CONST.ACTIVE_EFFECT_MODES;
+// Our out-of-range numeric append mode, from before v14 replaced numeric modes with string types.
+// Nothing in the system emits it any more -- weapon bonuses travel as the registered
+// "lancer.weaponBonus" change type below -- but it is exported, so the hook keeps honoring it for a
+// module that still does. Its counterpart AE_MODE_SET_JSON (11) is gone: nothing ever emitted it,
+// here or in any installed module.
 export const AE_MODE_APPEND_JSON = 12 as CONST.ACTIVE_EFFECT_MODES;
 
 // Keys we append JSON-encoded values onto via a custom change.
@@ -339,7 +337,6 @@ Hooks.on("applyActiveEffect", function (actor, change) {
     : changeType === undefined
       ? (change as { mode?: number }).mode
       : undefined;
-  const isSet = legacyMode == AE_MODE_SET_JSON;
   // A change carrying our own type should have been dispatched to the registered handler and never
   // arrive here. If it does, registration did not take effect (init ordering, or CHANGE_TYPES was
   // already memoized). Apply it anyway so bonuses do not silently vanish, but say so out loud --
@@ -355,16 +352,10 @@ Hooks.on("applyActiveEffect", function (actor, change) {
     legacyMode == AE_MODE_APPEND_JSON ||
     isStrandedOwnType ||
     (changeType === "custom" && JSON_APPEND_KEYS.has(change.key));
-  if (!isSet && !isAppend) return;
+  if (!isAppend) return;
   try {
-    const parsed_delta = resolveJsonAppendValue(change.value);
-    // Ok, now set it to wherever it was labeled
-    if (isSet) {
-      foundry.utils.setProperty(actor, change.key, parsed_delta);
-    } else {
-      const items = foundry.utils.getProperty(actor, change.key) as unknown[];
-      items.push(parsed_delta);
-    }
+    const items = foundry.utils.getProperty(actor, change.key) as unknown[];
+    items.push(resolveJsonAppendValue(change.value));
   } catch (e) {
     // Nothing to do really, except log it
     console.warn(e);
@@ -421,14 +412,6 @@ declare module "fvtt-types/configuration" {
         // When we propagate an effect, the origin becomes the parent actor.
         // This field maintains the true original
         deep_origin?: string | null;
-
-        // If this is a status, effect, or condition - whichever of those it is.
-        //
-        // Nothing in the system sets or reads this any more: the only writer is
-        // converter.ts statusInnateEffect, which is only reached through the uncalled
-        // statusConfigEffect, so no registered status or applied status effect carries it.
-        // Declared so a module that does set it still type-checks.
-        status_type?: "status" | "effect" | "condition";
       };
     };
   }

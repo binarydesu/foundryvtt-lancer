@@ -6,7 +6,6 @@ import {
   type LancerMECH_WEAPON,
   type LancerNPC_CLASS,
   type LancerNPC_FEATURE,
-  type LancerSTATUS,
 } from "../item/lancer-item";
 import type { BonusData } from "../models/bits/bonus";
 import type { SystemTemplates } from "../system-template";
@@ -17,7 +16,6 @@ import { asChanges, type LancerChangeType, type LancerEffectChange } from "./cha
 const FRAME_STAT_PRIORITY = 10; // Also handles npc classes
 const BONUS_STAT_PRIORITY = 20;
 const PILOT_STAT_PRIORITY = 30;
-const EFFECT_STAT_PRIORITY = 40;
 const FEATURE_OVERRIDE_PRIORITY = 50;
 
 // Makes an active effect for a frame.
@@ -283,67 +281,12 @@ export function npcInnateEffects(npc: LancerActor): LancerActiveEffect[] {
   return [deployable_effect];
 }
 
-/**
- * Creates the ActiveEffect data for a status/condition
- *
- * @public Dead inside the system: its only caller is statusConfigEffect below, which is itself
- * uncalled. Statuses reach actors as real ActiveEffects instead -- StatusModel#_preCreate refuses
- * an embedded status Item and routes it to toggleStatusEffect, so the CONFIG.statusEffects entries
- * that back that path are built by LancerActiveEffect's _backfillIcons/populateFrom* as bare
- * {id, name, img} records. Both functions are exported and reachable through game.lancer, so they
- * stay. Do not remove without checking for module usage.
- */
-export function statusInnateEffect(status: LancerSTATUS) {
-  let changes: LancerEffectChange[] = [
-    {
-      key: `system.statuses.${status.system.lid}`,
-      type: "override",
-      priority: EFFECT_STAT_PRIORITY,
-    },
-  ];
-  return {
-    name: status.name!,
-    changes,
-    origin: status.uuid,
-    img: status.img,
-    flags: {
-      lancer: {
-        ephemeral: true,
-        status_type: status.system.type,
-      },
-      core: {
-        // So it can be deleted via the ui if it is a core active effect
-        statusId: status.system.lid,
-      },
-    },
-  };
-}
-
-/**
- * Creates the pseudo-activeeffect-data that goes in the CONFIG.statusEffects variable,
- * based on a particular status
- * @param status Status to convert
- * @returns A value to be placed in CONFIG.statusEffects
- *
- * @public Has no caller anywhere in the system. Nothing populates CONFIG.statusEffects through it,
- * which is why no registered status carries the flags.lancer.status_type it sets -- and nothing
- * reads that flag either. Kept because it is exported and reachable through game.lancer.
- */
-export function statusConfigEffect(status: LancerSTATUS): any {
-  let base = statusInnateEffect(status);
-  return {
-    id: status.system.lid,
-    name: base.name,
-    changes: base.changes,
-    origin: base.origin,
-    img: base.img,
-    flags: {
-      lancer: {
-        status_type: status.system.type,
-      },
-    },
-  };
-}
+// statusInnateEffect / statusConfigEffect used to build ActiveEffect data for a status item and the
+// matching CONFIG.statusEffects entry. Both are gone: statuses reach actors as real ActiveEffects
+// (StatusModel#_preCreate refuses an embedded status Item and routes to toggleStatusEffect), and the
+// CONFIG.statusEffects entries are built by LancerActiveEffect's _backfillIcons/populateFrom* as
+// bare {id, name, img} records. Neither function had a caller, in this system or in any installed
+// module.
 
 // Makes an active effect for an npc class.
 type ClassStatKey = keyof SystemTemplates.NPC.NullableStatBlock;

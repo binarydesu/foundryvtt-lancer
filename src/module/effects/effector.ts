@@ -28,53 +28,11 @@ export class EffectHelper {
   // Track our parent actor
   constructor(private readonly actor: LancerActor) {}
 
-  /**
-   * Set the expected effects from a given uuid. If visible, the update will require redraw.
-   *
-   * @public Nothing inside the system calls this any more -- propagateEffectsInner writes the
-   * same state for every recipient in one batched request instead. It stays because effectHelper
-   * is public on LancerActor and reachable through the game.lancer API, so modules may depend on
-   * it. Do not remove without checking that.
-   */
-  async setEphemeralEffects(source_uuid: string, data: [], visible: boolean = true) {
-    let es: InheritedEffectsState = {
-      from_uuid: source_uuid,
-      data,
-      visible,
-    };
-    return this.actor.update(
-      {
-        "system.inherited_effects": es,
-      },
-      {
-        render: visible,
-      }
-    );
-  }
-
-  /**
-   * Clear the expected effects for a given uuid.
-   *
-   * @public Also has no callers inside the system -- it is the counterpart to
-   * setEphemeralEffects and reachable through the game.lancer API. Do not remove without
-   * checking for module usage.
-   */
-  async clearEphemeralEffects() {
-    let curr = this.actor.system.inherited_effects as InheritedEffectsState | null;
-    if (curr) {
-      // The field is nullable with an initial of null, so assigning null leaves it in exactly
-      // the state deleting the key would have. Avoids the "-=" special key entirely, which v14
-      // silently ignores here -- the effects simply stayed put, with no error to show for it.
-      await this.actor.update(
-        {
-          "system.inherited_effects": null,
-        },
-        {
-          render: curr.visible,
-        }
-      );
-    }
-  }
+  // setEphemeralEffects / clearEphemeralEffects used to write and clear system.inherited_effects for
+  // a single recipient. propagateEffectsInner writes that state for every recipient in one batched
+  // request instead, and nothing else called them -- not in this system, not in any installed
+  // module. Note for anyone reinstating a clear: assign null rather than the "-=" delete key, which
+  // v14 silently ignores here (the effects simply stay put, with no error to show for it).
 
   // Generate activeffects based on our system.ephemeral_effect state
   inheritedEffects(): LancerActiveEffect[] {
