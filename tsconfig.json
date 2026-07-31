@@ -12,8 +12,13 @@
     "noEmit": true,
     "useDefineForClassFields": false,
     "verbatimModuleSyntax": true,
-    // TODO
-    "skipLibCheck": false,
+    // Dependencies ship declarations we cannot fix and do not want to hear about: fvtt-types has no
+    // v14 release at all (npm latest is a Dec-2025 13.346 beta), so its own d.ts accounts for 55
+    // errors, and pixi-basis-ktx2 for another 8. Skipping lib checks drops exactly those 63 and
+    // leaves the 443 that are actually ours. Declarations are still *used* for checking our code --
+    // only the declaration files themselves go unchecked, including src/**/*.d.ts, so a hand-written
+    // shim placed there would not be verified either. Revisit once fvtt-types ships v14.
+    "skipLibCheck": true,
     "resolveJsonModule": true
   },
   "include": ["src/**/*.d.ts", "src/**/*.ts", "src/**/*.js", "src/**/*.svelte"]
