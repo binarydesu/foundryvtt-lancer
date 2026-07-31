@@ -49,7 +49,7 @@ tippy.setDefaultProps({ theme: "lancer-small", arrow: false, delay: [400, 200] }
 // import { importCC } from "./module/actor/import";
 import { LancerCombat, LancerCombatant } from "./module/combat/lancer-combat";
 import { LancerCombatTracker } from "./module/combat/lancer-combat-tracker";
-import { LancerActiveEffect } from "./module/effects/lancer-active-effect";
+import { LancerActiveEffect, registerLancerChangeTypes } from "./module/effects/lancer-active-effect";
 import { EntryType } from "./module/enums";
 import { targetsFromTemplate } from "./module/flows/_template";
 import { registerHandlebarsHelpers } from "./module/helpers";
@@ -249,6 +249,9 @@ Hooks.once("init", () => {
   CONFIG.Actor.documentClass = LancerActor;
   CONFIG.Item.documentClass = LancerItem;
   CONFIG.ActiveEffect.documentClass = LancerActiveEffect;
+  // Must happen at init: CONFIG.ActiveEffect.changeTypes is read into a memoized registry on the
+  // first effect application, so a later registration would be ignored.
+  registerLancerChangeTypes();
   CONFIG.Token.documentClass = LancerTokenDocument;
   CONFIG.Token.objectClass = LancerToken;
   // @ts-expect-error ???

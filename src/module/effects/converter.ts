@@ -11,7 +11,7 @@ import {
 import type { BonusData } from "../models/bits/bonus";
 import type { SystemTemplates } from "../system-template";
 import { rollEvalSync } from "../util/misc";
-import { LancerActiveEffect, type LancerEffectTarget } from "./lancer-active-effect";
+import { LANCER_WEAPON_BONUS_CHANGE, LancerActiveEffect, type LancerEffectTarget } from "./lancer-active-effect";
 import { asChanges, type LancerChangeType, type LancerEffectChange } from "./change";
 
 const FRAME_STAT_PRIORITY = 10; // Also handles npc classes
@@ -482,9 +482,9 @@ export function convertBonus(item: LancerItem, name: string, bonus: BonusData) {
       },
       changes: asChanges([
         {
-          // Routed through the "custom" change type so it reaches the applyActiveEffect
-          // hook -- v14 no longer resolves the out-of-range numeric mode we used before.
-          type: "custom",
+          // Our registered v14 change type: applyChange dispatches straight to its handler
+          // (registerLancerChangeTypes) instead of relying on the applyActiveEffect hook.
+          type: LANCER_WEAPON_BONUS_CHANGE,
           value: JSON.stringify(bonus),
           priority: 50,
           key: "system.bonuses.weapon_bonuses",

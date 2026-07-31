@@ -295,28 +295,43 @@ export class LancerActiveEffect<
 
 // To support more effects, we add several effect types.
 //
-// @public Neither constant has a producer left in the system: appends now travel as "custom"
-// changes matched by key, and nothing has ever emitted AE_MODE_SET_JSON. Both are exported, so
-// a module may still emit them. The handler below therefore keeps accepting them.
+// @public Neither numeric constant has a producer left in the system: our own weapon-bonus append
+// now travels as the registered "lancer.weaponBonus" change type (see below), and nothing has ever
+// emitted AE_MODE_SET_JSON. Both are exported, so a module may still emit them; the hook below keeps
+// accepting them (and the legacy bare-"custom" append matched by key) for that back-compat.
 export const AE_MODE_SET_JSON = 11 as CONST.ACTIVE_EFFECT_MODES;
 export const AE_MODE_APPEND_JSON = 12 as CONST.ACTIVE_EFFECT_MODES;
 
 // Keys we append JSON-encoded values onto via a custom change.
 export const JSON_APPEND_KEYS = new Set(["system.bonuses.weapon_bonuses"]);
 
+// Our own v14-native change type for weapon bonuses. convertBonus emits changes carrying this type;
+// registerLancerChangeTypes (below) registers a handler for it into CONFIG.ActiveEffect.changeTypes
+// at init, so ActiveEffect.applyChange dispatches straight to that handler. This replaces the older
+// approach of emitting a bare "custom" change and matching it by key in the hook.
+export const LANCER_WEAPON_BONUS_CHANGE = "lancer.weaponBonus";
+
 const _json_cache = {} as Record<string, any>;
+
+// Decode a JSON-append change value into a fresh copy. v14 resolves change values before handing
+// them over, so what we stringified on the way in can arrive already parsed -- only decode when it
+// is still a string, and cache that parse for the next actor carrying the same bonus. The copy is
+// required because the value lands in an actor's prepared data; two actors sharing one bonus would
+// otherwise end up sharing one object.
+function resolveJsonAppendValue(raw: unknown): any {
+  const source = typeof raw === "string" ? (_json_cache[raw] ??= JSON.parse(raw)) : raw;
+  return foundry.utils.deepClone(source);
+}
+
 Hooks.on("applyActiveEffect", function (actor, change) {
-  // v14 swapped numeric change modes for string types, so the out-of-range modes we used
-  // for these (11/12) no longer resolve and the change never reached this hook -- which
-  // silently dropped weapon damage/range bonuses. Custom-typed changes still route here,
-  // so match those by key.
+  // Back-compat path only: our own weapon bonuses now use the registered "lancer.weaponBonus" type
+  // and are dispatched by core straight to its handler, never reaching this hook. What still lands
+  // here is a module emitting the exported numeric modes (11/12). v14 swapped numeric modes for
+  // string types, so it never arrives untyped: the migration rewrites `mode: N` to `type:
+  // "custom.N"` (and keeps mode: N alongside). Recover the numeric mode from the "custom.N" suffix
+  // -- this matches the migrated change and avoids reading the deprecated `mode` field. Fall back
+  // to a bare mode only for a truly untyped change, which no v14 core path produces.
   const changeType = (change as { type?: string }).type;
-  // A module still emitting our out-of-range numeric modes (11/12) never arrives untyped in
-  // v14: the migration rewrites `mode: N` to `type: "custom.N"` (and keeps mode: N alongside).
-  // The old `type === undefined` guard therefore never matched such a change and it was
-  // dropped. Recover the numeric mode from the "custom.N" suffix instead -- this matches the
-  // migrated change and avoids reading the deprecated `mode` field. Fall back to a bare mode
-  // only for a truly untyped change, which no v14 core path produces.
   const suffix =
     typeof changeType === "string" && changeType.startsWith("custom.") ? Number(changeType.slice("custom.".length)) : NaN;
   const legacyMode = !Number.isNaN(suffix)
@@ -325,17 +340,24 @@ Hooks.on("applyActiveEffect", function (actor, change) {
       ? (change as { mode?: number }).mode
       : undefined;
   const isSet = legacyMode == AE_MODE_SET_JSON;
-  const isAppend = legacyMode == AE_MODE_APPEND_JSON || (changeType === "custom" && JSON_APPEND_KEYS.has(change.key));
+  // A change carrying our own type should have been dispatched to the registered handler and never
+  // arrive here. If it does, registration did not take effect (init ordering, or CHANGE_TYPES was
+  // already memoized). Apply it anyway so bonuses do not silently vanish, but say so out loud --
+  // silent loss is exactly the failure mode this whole path keeps producing.
+  const isStrandedOwnType = changeType === LANCER_WEAPON_BONUS_CHANGE;
+  if (isStrandedOwnType) {
+    console.warn(
+      `Lancer: ${LANCER_WEAPON_BONUS_CHANGE} reached the applyActiveEffect hook, so its change type is not registered. ` +
+        `Falling back to the legacy append path.`
+    );
+  }
+  const isAppend =
+    legacyMode == AE_MODE_APPEND_JSON ||
+    isStrandedOwnType ||
+    (changeType === "custom" && JSON_APPEND_KEYS.has(change.key));
   if (!isSet && !isAppend) return;
   try {
-    // v14 resolves change values before handing them over, so what we stringified on the
-    // way in can arrive already parsed. Only decode when it is still a string, and keep
-    // that parse for the next actor carrying the same bonus.
-    const raw = change.value as unknown;
-    const source = typeof raw === "string" ? (_json_cache[raw] ??= JSON.parse(raw)) : raw;
-    // Hand out a copy either way. The value lands in an actor's prepared data, so two actors
-    // with the same bonus would otherwise end up sharing one object.
-    const parsed_delta = foundry.utils.deepClone(source);
+    const parsed_delta = resolveJsonAppendValue(change.value);
     // Ok, now set it to wherever it was labeled
     if (isSet) {
       foundry.utils.setProperty(actor, change.key, parsed_delta);
@@ -349,6 +371,32 @@ Hooks.on("applyActiveEffect", function (actor, change) {
     console.warn(`JSON effect parse failed, ${change.value}`);
   }
 });
+
+// Register Lancer's own ActiveEffect change types. Must run at init: CONFIG.ActiveEffect.changeTypes
+// feeds ActiveEffect.CHANGE_TYPES, which memoizes on the first effect application, so a later
+// registration is silently ignored.
+export function registerLancerChangeTypes() {
+  const changeTypes = (CONFIG.ActiveEffect as { changeTypes?: Record<string, any> }).changeTypes;
+  if (!changeTypes) return;
+  changeTypes[LANCER_WEAPON_BONUS_CHANGE] = {
+    label: "lancer.effect.changeType.weaponBonus",
+    defaultPriority: 50,
+    // applyChange invokes this for its side effect (the return value is ignored) and expects it to
+    // honor modifyTarget, exactly as core's applyChangeField does. We append the decoded bonus onto
+    // system.bonuses.weapon_bonuses -- a free-form array with no schema field of its own, which is
+    // why the "custom" form had to fall through to the applyActiveEffect hook before.
+    handler(targetDoc: any, change: any, _field: unknown, _replacementData: unknown, modifyTarget = true) {
+      if (!modifyTarget) return;
+      try {
+        const items = foundry.utils.getProperty(targetDoc, change.key) as unknown[];
+        if (Array.isArray(items)) items.push(resolveJsonAppendValue(change.value));
+      } catch (e) {
+        console.warn(e);
+        console.warn(`Lancer weapon-bonus change failed, ${change.value}`);
+      }
+    },
+  };
+}
 
 declare module "fvtt-types/configuration" {
   interface DocumentClassConfig {

@@ -470,6 +470,9 @@
         "passthrough": "Passthrough",
         "disabled": "Disabled",
         "inherited": "Inherited"
+      },
+      "changeType": {
+        "weaponBonus": "Weapon Bonus"
       }
     },
     "tables": {

@@ -8,7 +8,17 @@
  * shape here keeps the call sites readable; once the types catch up this can be dropped in favor
  * of the real schema type.
  */
-export type LancerChangeType = "custom" | "multiply" | "add" | "subtract" | "downgrade" | "upgrade" | "override";
+export type LancerChangeType =
+  | "custom"
+  | "multiply"
+  | "add"
+  | "subtract"
+  | "downgrade"
+  | "upgrade"
+  | "override"
+  // Our own change type, registered into CONFIG.ActiveEffect.changeTypes at init. See
+  // LANCER_WEAPON_BONUS_CHANGE in lancer-active-effect.ts.
+  | "lancer.weaponBonus";
 
 export type LancerEffectChange = {
   key: string;
