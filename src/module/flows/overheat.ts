@@ -6,6 +6,7 @@ import { renderTemplateStep } from "./_render";
 import { Flow, type FlowState, type Step } from "./flow";
 import { LancerFlowState } from "./interfaces";
 import { applyTableCondition, conditionForOutcome } from "./table-conditions";
+import { keepLegendaryRollWithFewestOnes } from "../util/misc";
 
 const lp = LANCER.log_prefix;
 
@@ -186,6 +187,7 @@ export async function rollOverheatTable(state: FlowState<LancerFlowState.Overhea
     formula = `{${formula}, ${formula}}kh`;
   }
   let roll: Roll = await new Roll(formula).evaluate();
+  keepLegendaryRollWithFewestOnes(roll);
 
   let result = roll.total;
   if (result === undefined) return false;
