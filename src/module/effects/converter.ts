@@ -528,7 +528,9 @@ export function convertBonus(item: LancerItem, name: string, bonus: BonusData) {
       break;
     case "attack":
       target_type = EntryType.MECH;
+      // "Mech Attack Bonus" applies to ranged and melee attacks alike
       changes.push({ type, value, priority, key: "system.bonuses.flat.range_attack" });
+      changes.push({ type, value, priority, key: "system.bonuses.flat.melee_attack" });
       break;
     case "tech_attack":
       target_type = EntryType.MECH;
