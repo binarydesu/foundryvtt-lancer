@@ -584,13 +584,15 @@ Hooks.on("renderChatMessageHTML", async (cm, el, data) => {
             default:
               actor.beginStatFlow("system.hull");
               break;
+            // The stat fields are agi/sys/eng. "system.agility" and "system.systems" do not exist, so
+            // those checks used to roll a silent +0 instead of the mech's actual value.
             case "agi":
             case "agility":
-              actor.beginStatFlow("system.agility");
+              actor.beginStatFlow("system.agi");
               break;
             case "sys":
             case "systems":
-              actor.beginStatFlow("system.systems");
+              actor.beginStatFlow("system.sys");
               break;
             case "eng":
             case "engineering":
