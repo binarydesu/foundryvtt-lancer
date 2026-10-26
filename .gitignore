@@ -19,3 +19,6 @@ foundry.js
 
 # foundryvtt-cli
 fvttrc.yml
+
+# Undisclosed security issues stay local until fixed (see docs/agents/issue-tracker.md)
+.scratch/private/
