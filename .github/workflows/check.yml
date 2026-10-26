@@ -1,0 +1,36 @@
+# The fast gates on every push to any branch: the same `npm run check` that runs locally in Debian WSL.
+# Node comes from .nvmrc, which holds the Node major of the WSL toolchain; the check fails if they differ.
+name: Check
+
+on:
+  push:
+    branches: ["**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: npm run check
+    if: github.repository == 'binarydesu/foundryvtt-lancer'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check
+        run: npm run check
