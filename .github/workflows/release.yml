@@ -24,7 +24,8 @@ jobs:
     timeout-minutes: 15
     env:
       TAG: ${{ github.ref_name }}
-      ZIP: lancer-${{ github.ref_name }}.zip
+      # Not named ZIP: Info-ZIP's zip reads $ZIP as extra command-line options and then writes the wrong file.
+      ARCHIVE: lancer-${{ github.ref_name }}.zip
     steps:
       - uses: actions/checkout@v7
         with:
@@ -47,8 +48,10 @@ jobs:
       - name: Check that the built manifest belongs to this tag
         run: node scripts/version.mjs verify "$TAG" dist/system.json
 
-      - name: Package
-        run: cd dist && zip -qr "../$ZIP" .
+      - name: Package, and check that the zip carries the built manifest at its root
+        run: |
+          (cd dist && zip -qr "../$ARCHIVE" .)
+          unzip -p "$ARCHIVE" system.json | cmp - dist/system.json
 
       # A published version never changes: the action fails if a release for this tag already exists.
       - name: Publish the release
@@ -56,7 +59,8 @@ jobs:
         with:
           tag: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
-          artifacts: dist/system.json,${{ env.ZIP }}
+          artifacts: dist/system.json,${{ env.ARCHIVE }}
+          artifactErrorsFailBuild: true
           makeLatest: "true"
           body: |
             Lancer for Foundry VTT, binarydesu fork. The version names the upstream Lancer release it is based on.
