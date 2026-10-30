@@ -11,6 +11,7 @@
     "build": "vite build",
     "build:packs": "./scripts/pack.mjs",
     "build:watch": "vite build --watch",
+    "bump": "node scripts/version.mjs bump",
     "check": "node scripts/check/check.mjs",
     "clean": "rm -fR dist",
     "format": "dprint fmt",
@@ -18,7 +19,6 @@
     "link": "./scripts/symlink.mjs",
     "postinstall": "./scripts/symlink.mjs",
     "serve": "vite",
-    "version": "./scripts/version.mjs && git add src/system.json",
     "watch": "vite build --watch"
   },
   "author": "",

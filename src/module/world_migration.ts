@@ -55,6 +55,9 @@ function migrationProgress(count: number) {
  * Some changes aren't neatly handleable via DataModels,
  * such as changes to prototype tokens or flags.
  * Instead handle these via migrateWorld.
+ *
+ * A version threshold for a migration the fork adds must be a fork version such as "fork.3.1.3.2" (ADR-0003).
+ * Every fork version is newer than every upstream version, so an upstream-style threshold such as "3.2.0" never fires.
  */
 export async function migrateWorld() {
   const curr_version = game.settings.get(game.system.id, LANCER.setting_migration_version);
