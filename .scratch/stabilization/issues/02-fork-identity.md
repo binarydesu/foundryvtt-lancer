@@ -10,7 +10,7 @@ must see only the fork's own releases. That needs four things:
 
 **Blocked by:** None — can start immediately.
 
-**Status:** claimed
+**Status:** resolved
 
 Spec: `.scratch/stabilization/spec.md`, user stories 37–40 and section "Fork identity (ADR-0003)".
 
@@ -26,17 +26,17 @@ Spec: `.scratch/stabilization/spec.md`, user stories 37–40 and section "Fork i
   - [x] a fork version against the upstream version it is based on, so that switching the NAS from upstream 3.1.3
         counts as an update
   - [x] a fork version against a later upstream version
-- [ ] Pushing a version tag publishes a release on the fork. Its manifest and zip match the manifest URLs above.
-- [ ] The user confirms before the first tag push, because that publishes publicly.
+- [x] Pushing a version tag publishes a release on the fork. Its manifest and zip match the manifest URLs above.
+- [x] The user confirms before the first tag push, because that publishes publicly.
 - [x] Foundry's setup screen shows the new version for an installed build.
 
 ## Comments
 
 **2026-10-30, implementation (worktree branch `claude/sad-nash-bdc052`, on top of `v14` at `152caeb9`):**
 
-- `src/system.json`: version `fork.3.1.3.1`. `url` and `bugs` point at `https://github.com/binarydesu/foundryvtt-lancer`.
+- `src/system.json`: version `fork.3.1.3.2` (see "Releases" below for `fork.3.1.3.1`). `url` and `bugs` point at `https://github.com/binarydesu/foundryvtt-lancer`.
   `manifest` is `.../releases/latest/download/system.json`, and `download` is
-  `.../releases/download/fork.3.1.3.1/lancer-fork.3.1.3.1.zip`. The id stays `lancer`. `readme`, `changelog` and the
+  `.../releases/download/fork.3.1.3.2/lancer-fork.3.1.3.2.zip`. The id stays `lancer`. `readme`, `changelog` and the
   `media` images still point at upstream's master. The ticket does not cover them, and Foundry does not use them for
   updates.
 - **Finding: the manifest URL alone does not protect the fork.** Foundry 14.369's Update button calls `checkPackage`
@@ -85,3 +85,34 @@ Spec: `.scratch/stabilization/spec.md`, user stories 37–40 and section "Fork i
   | `fork.3.1.3.1` | stand-in that offers upstream 3.2.0 for Foundry 14 | stays on the fork's manifest; shows an error, because no fork release exists yet |
   | `3.1.3.fork.1` (rejected scheme) | the same stand-in | offers upstream 3.2.0 and would install from upstream's manifest |
   | `fork.3.1.3.1` | Foundry's real listing | stays on the fork's manifest |
+
+**2026-10-30, releases:**
+
+- The user confirmed the first tag push in this session, and later the push of `fork.3.1.3.2`. Branch
+  `stab/02-fork-identity` is on the fork, and the check workflow passes there.
+- `fork.3.1.3.1` (`f183bfe2`) was published without its zip.
+  - Cause: Info-ZIP's `zip` reads the environment variable `ZIP` as extra options. The workflow had set `ZIP` to the
+    archive name, so the archive landed in `dist/`. The upload step only warned about the missing file.
+  - Reproduced with Zip 3.0 on Ubuntu 24.04, the runner's OS.
+  - The user chose to leave this release as it is. Its manifest names a zip that does not exist. The manifest URL reads
+    `releases/latest`, so it no longer serves this release.
+- Fix (`5005c6c9`):
+  - The variable is now `ARCHIVE`.
+  - The packaging step compares the zip's `system.json` with the built one.
+  - `artifactErrorsFailBuild: true` makes a missing artifact fail the job.
+  - Red check in the same container: with `ZIP` set again, the step fails.
+- `fork.3.1.3.2` (`6407d888`, bumped with `npm run bump`) is the first complete release. It is published, not a draft
+  or prerelease, and it is the repository's latest release. Its assets are `system.json` and
+  `lancer-fork.3.1.3.2.zip`.
+  - The manifest URL `.../releases/latest/download/system.json` serves `fork.3.1.3.2`, and `verify` passes on it.
+  - Its `download` URL serves the zip: 719 entries, `system.json` at the root, byte-identical to the served manifest.
+- Installed from the manifest URL on a disposable Foundry 14.369 with Foundry's real package listing, through
+  `game.installPackage`, the call the Install System dialog makes:
+
+  | Before | After | Setup screen | Update button |
+  |---|---|---|---|
+  | nothing installed | `fork.3.1.3.2`, the fork's manifest and zip | `LANCER fork.3.1.3.2` | current |
+  | like the NAS today: `3.1.3`, upstream's manifest | `fork.3.1.3.2`, the fork's manifest and zip | `LANCER fork.3.1.3.2` | current |
+
+  So the NAS can switch to manifest-based updates by installing the manifest URL over its current build, or by the
+  usual rsync deploy of a build from this branch.
